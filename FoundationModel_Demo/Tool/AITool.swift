@@ -48,5 +48,21 @@ class AITool {
                                              generating: type )
         return stream
     }
+    
+    /// 透過具備天氣查詢工具的語言模型工作階段查詢指定城市天氣
+    /// - Parameter city: 要查詢的城市名稱（例如：台北、台中）
+    /// - Returns: 天氣查詢結果的文字，若失敗則回傳錯誤描述
+    public func queryWithWeatherTool( city: String ) async -> String {
+        // 建立一個語言模型工作階段，並注入自訂的 WeatherTool 以允許模型在需要時呼叫外部工具
+        let session = LanguageModelSession( tools: [WeatherTool()] )
+        do {
+            // 對模型發出請求，要求查詢指定城市的天氣
+            let response = try await session.respond( to: "請查詢\(city)地區的天氣" )
+            // 從模型回應中取出文字內容並回傳
+            return response.content
+        } catch {
+            // 回傳錯誤描述
+            return "查詢失敗：\(error)"
+        }
+    }
 }
-

@@ -11,7 +11,8 @@ struct ContentView: View {
     private let actions: [Action] = [
         .chat,
         .tripIdeas,
-        .pet
+        .pet,
+        .weather
     ]
     
     var body: some View {
@@ -93,12 +94,14 @@ private enum Action: Hashable {
     case chat
     case tripIdeas
     case pet
+    case weather
 
     var systemImage: String {
         switch self {
         case .chat: return "message.fill"
         case .tripIdeas: return "airplane.departure"
         case .pet: return "pawprint.fill"
+        case .weather: return "cloud.sun.fill"
         }
     }
 
@@ -107,6 +110,7 @@ private enum Action: Hashable {
         case .chat: return "開始自由對話"
         case .tripIdeas: return "取得旅遊建議"
         case .pet: return "來養一隻寵物"
+        case .weather: return "查詢天氣"
         }
     }
 
@@ -115,6 +119,7 @@ private enum Action: Hashable {
         case .chat: return .blue
         case .tripIdeas: return .green
         case .pet: return .orange
+        case .weather: return .teal
         }
     }
 
@@ -127,6 +132,8 @@ private enum Action: Hashable {
             TripIdeasView()
         case .pet:
             PetView()
+        case .weather:
+            WeatherView()
         }
     }
 }
