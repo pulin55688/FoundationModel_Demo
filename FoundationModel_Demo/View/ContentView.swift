@@ -10,7 +10,8 @@ import FoundationModels
 struct ContentView: View {
     private let actions: [Action] = [
         .chat,
-        .tripIdeas
+        .tripIdeas,
+        .pet
     ]
     
     var body: some View {
@@ -91,11 +92,13 @@ private struct ActionCard<Content: View>: View {
 private enum Action: Hashable {
     case chat
     case tripIdeas
+    case pet
 
     var systemImage: String {
         switch self {
         case .chat: return "message.fill"
         case .tripIdeas: return "airplane.departure"
+        case .pet: return "pawprint.fill"
         }
     }
 
@@ -103,6 +106,7 @@ private enum Action: Hashable {
         switch self {
         case .chat: return "開始自由對話"
         case .tripIdeas: return "取得旅遊建議"
+        case .pet: return "來養一隻寵物"
         }
     }
 
@@ -110,6 +114,7 @@ private enum Action: Hashable {
         switch self {
         case .chat: return .blue
         case .tripIdeas: return .green
+        case .pet: return .orange
         }
     }
 
@@ -120,6 +125,8 @@ private enum Action: Hashable {
             ChatView()
         case .tripIdeas:
             TripIdeasView()
+        case .pet:
+            PetView()
         }
     }
 }
@@ -136,6 +143,8 @@ private struct ActionLink: View {
         .tint(action.tint)
     }
 }
+
+
 
 #Preview {
     ContentView()

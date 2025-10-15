@@ -21,6 +21,22 @@ class AITool {
         }
     }
     
+    /// 使用指定型別產生非串流回應
+    /// - Parameters:
+    ///   - prompt: 要傳給模型的提示文字
+    ///   - type: 要生成的型別 (需符合 Generable)
+    /// - Returns: 生成的型別實例，若失敗回傳 nil
+    public func generateResponse<T>(for prompt: String, generating type: T.Type) async -> T? where T: Generable {
+        let session = LanguageModelSession()
+        do {
+            guard let answer = try? await session.respond( to: "請使用繁體中文回答以下問題：\(prompt)",
+                                                           generating: type ) else { return nil }
+            return answer.content
+        } catch {
+            return nil
+        }
+    }
+    
     /// 建立一個回應串流方法，輸入提示與要生成的資料型別，輸出模型回應串流
     /// - Parameters:
     ///   - prompt: 要傳給模型的提示文字
@@ -33,3 +49,4 @@ class AITool {
         return stream
     }
 }
+
