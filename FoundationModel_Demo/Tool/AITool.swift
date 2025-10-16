@@ -11,12 +11,18 @@ import FoundationModels
 class AITool {
     static let shared = AITool()
     
-    // 接收 prompt，回傳 AI 回應內容
+    /// 接收 prompt，回傳 AI 回應內容
+    /// - Returns: 生成的回應內容
     public func generateResponse( for prompt: String ) async -> String {
+        // 建立一個語言模型工作階段實例
         let session = LanguageModelSession()
+        
+        // 對模型發出請求並等待回應
         if let answer = try? await session.respond(to: "請使用繁體中文回答以下問題：\(prompt)") {
+            // 成功取得模型回應後，回傳其文字內容
             return answer.content
         } else {
+            // 請求或解析過程發生錯誤（例如：工作階段失敗或中斷）
             return ""
         }
     }
@@ -66,3 +72,4 @@ class AITool {
         }
     }
 }
+
