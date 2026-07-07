@@ -17,6 +17,7 @@ struct ContentView: View {
         .tripIdeas,
         .pet,
         .weather,
+        .contextInspector,
         .imageUnderstanding,
         .dynamicProfile
     ]
@@ -135,6 +136,7 @@ private enum Action: Hashable {
     case tripIdeas
     case pet
     case weather
+    case contextInspector
     case imageUnderstanding
     case dynamicProfile
 
@@ -144,6 +146,7 @@ private enum Action: Hashable {
         case .tripIdeas: return "airplane.departure"
         case .pet: return "pawprint.fill"
         case .weather: return "cloud.sun.fill"
+        case .contextInspector: return "ruler"
         case .imageUnderstanding: return "photo.fill.on.rectangle.fill"
         case .dynamicProfile: return "slider.horizontal.3"
         }
@@ -155,6 +158,7 @@ private enum Action: Hashable {
         case .tripIdeas: return "取得旅遊建議"
         case .pet: return "來養一隻寵物"
         case .weather: return "查詢天氣"
+        case .contextInspector: return "Context Inspector"
         case .imageUnderstanding: return "圖片理解"
         case .dynamicProfile: return "Dynamic Profiles"
         }
@@ -166,6 +170,7 @@ private enum Action: Hashable {
         case .tripIdeas: return .green
         case .pet: return .orange
         case .weather: return .teal
+        case .contextInspector: return .mint
         case .imageUnderstanding: return .indigo
         case .dynamicProfile: return .purple
         }
@@ -173,7 +178,7 @@ private enum Action: Hashable {
 
     var isWWDC26Feature: Bool {
         switch self {
-        case .imageUnderstanding, .dynamicProfile:
+        case .contextInspector, .imageUnderstanding, .dynamicProfile:
             return true
         case .chat, .tripIdeas, .pet, .weather:
             return false
@@ -191,6 +196,12 @@ private enum Action: Hashable {
             PetView()
         case .weather:
             WeatherView()
+        case .contextInspector:
+            if #available(iOS 26.4, *) {
+                ContextInspectorView()
+            } else {
+                Text("Context Inspector requires iOS 26.4.")
+            }
         case .imageUnderstanding:
             if #available(iOS 27.0, *) {
                 ImageUnderstandingView()
