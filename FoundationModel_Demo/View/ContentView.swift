@@ -6,14 +6,24 @@
 
 import SwiftUI
 import FoundationModels
+import Playgrounds
 
 struct ContentView: View {
+    @AppStorage("showsWWDC26Features")
+    private var showsWWDC26Features = false
+
     private let actions: [Action] = [
         .chat,
         .tripIdeas,
         .pet,
-        .weather
+        .weather,
+        .imageUnderstanding,
+        .dynamicProfile
     ]
+    
+    private var visibleActions: [Action] {
+        actions.filter { showsWWDC26Features || !$0.isWWDC26Feature }
+    }
     
     var body: some View {
         NavigationStack {
@@ -21,28 +31,40 @@ struct ContentView: View {
                 BackgroundGradient()
                     .ignoresSafeArea()
 
-                VStack(spacing: 24) {
-                    Spacer(minLength: 0)
+                GeometryReader { geometry in
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            Spacer(minLength: 0)
 
-                    TitleHeader( title: "Apple Intelligence",
-                                 subtitle: "選擇一種模式開始互動" )
-                        .padding(.horizontal)
+                            TitleHeader( title: "Apple Intelligence",
+                                         subtitle: "選擇一種模式開始互動" )
+                                .padding(.horizontal)
 
-                    ActionCard {
-                        ForEach(actions, id: \.self) { action in
-                            ActionLink(action: action)
+                            WWDC26FeatureToggle(isOn: $showsWWDC26Features)
+                                .padding(.horizontal)
+
+                            ActionCard {
+                                ForEach(visibleActions, id: \.self) { action in
+                                    ActionLink(action: action)
+                                }
+                            }
+                            .padding(.horizontal)
+
+                            Spacer(minLength: 0)
                         }
+                        .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
+                        .padding()
                     }
-                    .padding(.horizontal)
-
-                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding()
             }
             .navigationTitle("")
         }
     }
+    
+//    func createModel() -> GenerativeModel {
+//        // Create a `GenerativeModel` instance with a model that supports your use case
+//        return ai.generativeModel(modelName: "gemini-2.5-pro")
+//    }
 }
 
 private struct BackgroundGradient: View {
@@ -90,11 +112,31 @@ private struct ActionCard<Content: View>: View {
     }
 }
 
+private struct WWDC26FeatureToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Label("顯示 WWDC26 功能", systemImage: "sparkles")
+                .font(.subheadline.weight(.semibold))
+        }
+        .tint(.purple)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+    }
+}
+
 private enum Action: Hashable {
     case chat
     case tripIdeas
     case pet
     case weather
+    case imageUnderstanding
+    case dynamicProfile
 
     var systemImage: String {
         switch self {
@@ -102,6 +144,8 @@ private enum Action: Hashable {
         case .tripIdeas: return "airplane.departure"
         case .pet: return "pawprint.fill"
         case .weather: return "cloud.sun.fill"
+        case .imageUnderstanding: return "photo.fill.on.rectangle.fill"
+        case .dynamicProfile: return "slider.horizontal.3"
         }
     }
 
@@ -111,6 +155,8 @@ private enum Action: Hashable {
         case .tripIdeas: return "取得旅遊建議"
         case .pet: return "來養一隻寵物"
         case .weather: return "查詢天氣"
+        case .imageUnderstanding: return "圖片理解"
+        case .dynamicProfile: return "Dynamic Profiles"
         }
     }
 
@@ -120,6 +166,17 @@ private enum Action: Hashable {
         case .tripIdeas: return .green
         case .pet: return .orange
         case .weather: return .teal
+        case .imageUnderstanding: return .indigo
+        case .dynamicProfile: return .purple
+        }
+    }
+
+    var isWWDC26Feature: Bool {
+        switch self {
+        case .imageUnderstanding, .dynamicProfile:
+            return true
+        case .chat, .tripIdeas, .pet, .weather:
+            return false
         }
     }
 
@@ -134,6 +191,18 @@ private enum Action: Hashable {
             PetView()
         case .weather:
             WeatherView()
+        case .imageUnderstanding:
+            if #available(iOS 27.0, *) {
+                ImageUnderstandingView()
+            } else {
+                Text("Image Understanding requires iOS 27.")
+            }
+        case .dynamicProfile:
+            if #available(iOS 27.0, *) {
+                DynamicProfileView()
+            } else {
+                Text("Dynamic Profiles require iOS 27.")
+            }
         }
     }
 }
