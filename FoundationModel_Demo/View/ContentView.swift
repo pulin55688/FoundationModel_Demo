@@ -18,6 +18,7 @@ struct ContentView: View {
         .pet,
         .weather,
         .contextInspector,
+        .systemTools,
         .imageUnderstanding,
         .dynamicProfile
     ]
@@ -137,6 +138,7 @@ private enum Action: Hashable {
     case pet
     case weather
     case contextInspector
+    case systemTools
     case imageUnderstanding
     case dynamicProfile
 
@@ -147,6 +149,7 @@ private enum Action: Hashable {
         case .pet: return "pawprint.fill"
         case .weather: return "cloud.sun.fill"
         case .contextInspector: return "ruler"
+        case .systemTools: return "wrench.and.screwdriver.fill"
         case .imageUnderstanding: return "photo.fill.on.rectangle.fill"
         case .dynamicProfile: return "slider.horizontal.3"
         }
@@ -159,6 +162,7 @@ private enum Action: Hashable {
         case .pet: return "來養一隻寵物"
         case .weather: return "查詢天氣"
         case .contextInspector: return "Context Inspector"
+        case .systemTools: return "System Tools"
         case .imageUnderstanding: return "圖片理解"
         case .dynamicProfile: return "Dynamic Profiles"
         }
@@ -171,6 +175,7 @@ private enum Action: Hashable {
         case .pet: return .orange
         case .weather: return .teal
         case .contextInspector: return .mint
+        case .systemTools: return .cyan
         case .imageUnderstanding: return .indigo
         case .dynamicProfile: return .purple
         }
@@ -178,7 +183,7 @@ private enum Action: Hashable {
 
     var isWWDC26Feature: Bool {
         switch self {
-        case .contextInspector, .imageUnderstanding, .dynamicProfile:
+        case .contextInspector, .systemTools, .imageUnderstanding, .dynamicProfile:
             return true
         case .chat, .tripIdeas, .pet, .weather:
             return false
@@ -201,6 +206,12 @@ private enum Action: Hashable {
                 ContextInspectorView()
             } else {
                 Text("Context Inspector requires iOS 26.4.")
+            }
+        case .systemTools:
+            if #available(iOS 27.0, *) {
+                SystemToolsView()
+            } else {
+                Text("System Tools require iOS 27.")
             }
         case .imageUnderstanding:
             if #available(iOS 27.0, *) {

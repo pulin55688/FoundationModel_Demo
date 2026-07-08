@@ -17,6 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "75136A152E7E6DBF00855B57"
                BuildableName = "FoundationModel_Demo.app"
+               BlueprintName = "FoundationModel_Demo"
                ReferencedContainer = "container:FoundationModel_Demo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -36,6 +37,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "75136A2C2E7E6DC000855B57"
                BuildableName = "FoundationModel_DemoUITests.xctest"
+               BlueprintName = "FoundationModel_DemoUITests"
                ReferencedContainer = "container:FoundationModel_Demo.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -46,6 +48,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "75136A222E7E6DC000855B57"
                BuildableName = "FoundationModel_DemoTests.xctest"
+               BlueprintName = "FoundationModel_DemoTests"
                ReferencedContainer = "container:FoundationModel_Demo.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -68,6 +71,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "75136A152E7E6DBF00855B57"
             BuildableName = "FoundationModel_Demo.app"
+            BlueprintName = "FoundationModel_Demo"
             ReferencedContainer = "container:FoundationModel_Demo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -84,6 +88,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "75136A152E7E6DBF00855B57"
             BuildableName = "FoundationModel_Demo.app"
+            BlueprintName = "FoundationModel_Demo"
             ReferencedContainer = "container:FoundationModel_Demo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

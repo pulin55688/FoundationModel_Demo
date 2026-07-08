@@ -7,6 +7,7 @@
 - [WWDC26 - What's new in the Foundation Models framework](https://developer.apple.com/videos/play/wwdc2026/241/)
 - [WWDC26 - Build with the new Apple Foundation Model on Private Cloud Compute](https://developer.apple.com/videos/play/wwdc2026/319/)
 - [WWDC26 - Meet the Evaluations framework](https://developer.apple.com/videos/play/wwdc2026/298/)
+- [WWDC26 - What's new in image understanding](https://developer.apple.com/videos/play/wwdc2026/237/)
 
 ## WWDC25: 第一版 Foundation Models Framework
 
@@ -87,6 +88,133 @@ let response = try await session.respond {
 - file URL
 
 圖片不用裁切成固定比例，但越大的圖片會消耗更多 tokens，也會增加 latency。
+
+### WWDC26 237: Image Understanding 重點
+
+這支影片把 WWDC26 的 image understanding 分成兩條線：Vision framework 的傳統電腦視覺能力，以及 Foundation Models framework 的 LLM 圖片理解能力。
+
+#### Foundation Models 圖片輸入
+
+Foundation Models 今年可以直接把 image attachment 放進 prompt，適合做比較開放式、語意型的圖片任務：
+
+- 產生圖片 caption
+- 摘要圖片中的手寫或印刷資訊
+- 根據照片生成 agenda / checklist
+- 針對室內空間提出建議
+- 根據冰箱照片產生食譜
+
+概念範例：
+
+```swift
+let response = try await session.respond {
+    "請描述這張圖片，並整理重點。"
+    Attachment(image)
+}
+```
+
+判斷使用 Foundation Models 或 Vision 的方式：
+
+- Foundation Models：適合語意理解、開放式問題、整合圖片內容後產生自然語言。
+- Vision：適合固定任務，例如 OCR、barcode、segmentation、pose、face、classification，通常速度更快，也更適合即時影像處理。
+- 兩者可以一起用：Foundation Models 負責推理和組織回答，Vision tool 負責提供可靠的視覺辨識結果。
+
+#### Image-based Tool Calling
+
+WWDC26 的 tool calling 支援圖片參數。模型不會把整張圖片直接塞進 tool argument，而是傳遞 `ImageReference`，tool 再從 session transcript 解析出真正的 image attachment。
+
+自訂圖片 tool 的核心流程：
+
+1. Tool 的 arguments 使用 `ImageReference`
+2. 在 tool 內透過 `@SessionProperty(\.history)` 取得 session history
+3. 把 history 轉成 `Transcript`
+4. 用 `imageReference.resolve(in: transcript)` 找回 image attachment
+5. 把 attachment 轉成 `pixelBuffer` 或其他影像格式，再交給 Vision / Core ML / 自己的處理邏輯
+
+概念範例：
+
+```swift
+struct PlantIdentifierTool: Tool {
+    @SessionProperty(\.history) var history
+
+    @Generable
+    struct Arguments {
+        var image: ImageReference
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        let transcript = Transcript(history)
+
+        guard let imageAttachment = arguments.image.resolve(in: transcript) else {
+            throw AppError.imageNotFound
+        }
+
+        let pixelBuffer = try imageAttachment.pixelBuffer()
+        return classifyPlant(pixelBuffer)
+    }
+}
+```
+
+這也解釋了目前 demo 裡 OCR / Barcode tool 為什麼一定要替圖片加上 label：
+
+```swift
+Attachment(image)
+    .label("inputImage")
+```
+
+影片中特別提醒：要讓模型呼叫 image-based tool 時，attached image 應該加 label。這個 label 是模型辨識「要把哪張圖片交給 tool」的依據。如果沒有固定 label，模型可能會根據圖片內容自己猜一個 label，最後 tool 會在 transcript 裡找不到圖片。
+
+#### Vision system tools
+
+Vision 今年提供可直接接進 Foundation Models session 的 tools：
+
+- `BarcodeReaderTool`
+  - 適合 QR Code、barcode。
+  - 範例場景是從活動海報擷取日期、地點，並用 barcode tool 讀出 QR Code 裡的報名網址。
+
+- `OCRTool`
+  - 適合細小、密集或模型本身不容易穩定讀出的文字。
+  - 支援超過 30 種語言。
+
+使用概念：
+
+```swift
+let session = LanguageModelSession(
+    model: model,
+    tools: [BarcodeReaderTool()]
+)
+
+let response = try await session.respond {
+    "請讀取這張海報的日期、地點與報名網址。"
+    Attachment(image)
+        .label("flyer")
+}
+```
+
+#### Vision tap-to-segment
+
+Vision 新增 tap-to-segment API，可以用互動方式分割圖片中的任意物件，不再只限於人物 segmentation。
+
+支援的選取方式：
+
+- 點選物件中的一個點
+- bounding box
+- lasso
+- scribble
+- 用 included / excluded points 逐步修正 mask
+
+實作重點：
+
+- 使用 `ImageRequestHandler` 處理圖片。
+- 使用 `GenerateIterativeSegmentationRequest` 產生 segmentation mask。
+- Vision 座標系是 normalized coordinate，原點在左下角，x/y 介於 0 到 1。
+- lasso 或 scribble 的 stroke width 不能太細，建議至少是圖片寬度的 1%。
+- 第一次在裝置上執行前，可能需要先下載模型資源；可用 `downloadAssets` 觸發下載，並用 `assetStatus` 檢查是否 ready。
+
+#### Vision on watchOS
+
+Vision 今年也支援 watchOS。影片示範用 saliency analysis 找出圖片中最重要的主體，然後自動 crop，讓 watch 小螢幕可以顯示更清楚的主體畫面。
+
+這跟 Foundation Models 沒有直接關係，但代表 Vision 的固定任務 API 可以在更多平台上使用。若 app 有 watchOS extension，可以用 Vision 做輕量圖片前處理，再把摘要或結果交給 Foundation Models / PCC 做語意層整理。
 
 ## 3. 新增 PrivateCloudComputeLanguageModel
 
@@ -196,6 +324,15 @@ WWDC26 新增 Apple 提供的 tools：
 其中 Spotlight search tool 可用來做 local RAG，讓模型查詢本機 Spotlight index，取得 app 或使用者本地資料。
 
 這代表 Foundation Models 不只是「產文字」，也逐漸能透過系統工具理解圖片、讀文字、查本地知識。
+
+Image-based system tools 的實作注意事項：
+
+- 要把 tool 放進 `LanguageModelSession(model:tools:instructions:)`。
+- 若希望模型一定呼叫工具，可搭配 `GenerationOptions(toolCallingMode: .required)`。
+- 圖片 attachment 建議固定 label，例如 `.label("inputImage")`。
+- prompt / instructions 要明確告訴模型使用同一個 label，避免模型自己發明 label。
+- `SystemLanguageModel.default` 可用，不代表 OCR / Barcode system tool 的底層模型資源一定 ready；system tool 仍可能因裝置、OS beta、模型資源尚未下載或不支援而失敗。
+- 目前 simulator SDK 不一定包含 Vision + Foundation Models system tools，實測時應以 iOS 27 真機為主。
 
 ## 8. Dynamic Profiles
 
@@ -376,17 +513,30 @@ Utilities package 包含：
    - 使用 `Attachment(UIImage(...))`
    - 展示本機模型 image understanding
 
-4. PCC fallback path
+4. System tools demo
+   - 使用 `OCRTool` 讀取產品圖片、票券、文件截圖中的文字
+   - 使用 `BarcodeReaderTool` 讀取 QR Code / barcode
+   - 圖片 attachment 固定 `.label("inputImage")`
+   - UI 顯示 tool call transcript、token usage、錯誤診斷
+   - 若 system tool 在裝置上不可用，顯示限制原因，而不是只顯示原始錯誤碼
+
+5. Tap-to-segment / Vision demo
+   - 可新增互動式圖片 segmentation 頁面
+   - 展示 point、box、lasso、scribble 如何產生 mask
+   - 補上 asset download / assetStatus 診斷
+   - 這個 demo 屬於 Vision framework，但能跟 Foundation Models 圖片分析形成對照
+
+6. PCC fallback path
    - 先寫好 PCC path
    - 實際不可用時 fallback 到 `SystemLanguageModel`
    - 等之後有 entitlement 再啟用
 
-5. Dynamic Profiles demo
+7. Dynamic Profiles demo
    - 例如圖片分析用 System model
    - 生成創意建議用 PCC deep reasoning
    - 若 PCC unavailable，改用 System fallback
 
-6. Evaluations target
+8. Evaluations target
    - 建一批固定 prompts
    - 評估不同 prompt / `@Guide` / tools 設計
    - 未來有 PCC 後再比較 System vs PCC
