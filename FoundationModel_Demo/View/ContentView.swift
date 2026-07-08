@@ -20,6 +20,7 @@ struct ContentView: View {
         .contextInspector,
         .systemTools,
         .imageUnderstanding,
+        .tapToSegment,
         .dynamicProfile
     ]
     
@@ -140,6 +141,7 @@ private enum Action: Hashable {
     case contextInspector
     case systemTools
     case imageUnderstanding
+    case tapToSegment
     case dynamicProfile
 
     var systemImage: String {
@@ -151,6 +153,7 @@ private enum Action: Hashable {
         case .contextInspector: return "ruler"
         case .systemTools: return "wrench.and.screwdriver.fill"
         case .imageUnderstanding: return "photo.fill.on.rectangle.fill"
+        case .tapToSegment: return "hand.tap.fill"
         case .dynamicProfile: return "slider.horizontal.3"
         }
     }
@@ -164,6 +167,7 @@ private enum Action: Hashable {
         case .contextInspector: return "Context Inspector"
         case .systemTools: return "System Tools"
         case .imageUnderstanding: return "圖片理解"
+        case .tapToSegment: return "Tap to Segment"
         case .dynamicProfile: return "Dynamic Profiles"
         }
     }
@@ -177,13 +181,14 @@ private enum Action: Hashable {
         case .contextInspector: return .mint
         case .systemTools: return .cyan
         case .imageUnderstanding: return .indigo
+        case .tapToSegment: return .pink
         case .dynamicProfile: return .purple
         }
     }
 
     var isWWDC26Feature: Bool {
         switch self {
-        case .contextInspector, .systemTools, .imageUnderstanding, .dynamicProfile:
+        case .contextInspector, .systemTools, .imageUnderstanding, .tapToSegment, .dynamicProfile:
             return true
         case .chat, .tripIdeas, .pet, .weather:
             return false
@@ -218,6 +223,12 @@ private enum Action: Hashable {
                 ImageUnderstandingView()
             } else {
                 Text("Image Understanding requires iOS 27.")
+            }
+        case .tapToSegment:
+            if #available(iOS 27.0, *) {
+                TapToSegmentView()
+            } else {
+                Text("Tap to Segment requires iOS 27.")
             }
         case .dynamicProfile:
             if #available(iOS 27.0, *) {
