@@ -404,11 +404,12 @@ struct ImageUnderstandingView: View {
         }
 
         let session = LanguageModelSession(model: model)
-        return try await session.respond {
+        let promptToAI = Prompt {
             prompt
             // Attachment(image) 是 WWDC26 新增的圖片輸入形式，和文字 prompt 放在同一個 builder。
             Attachment(image)
         }
+        return try await session.respond(to: promptToAI)
     }
 }
 
