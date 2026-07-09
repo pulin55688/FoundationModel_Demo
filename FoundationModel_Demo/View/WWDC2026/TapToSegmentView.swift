@@ -13,21 +13,26 @@ import UIKit
 struct TapToSegmentView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
-    @State private var spotlightOverlayImage: CGImage?
+    @State private var tapToSegmenter: TapToSegmenter?
+    @State private var maskedImage: CGImage?
     @State private var maskOverlayImage: CGImage?
     @State private var selectedPoint: CGPoint?
+    @State private var lassoPoints: [CGPoint] = []
     @State private var quality: TapToSegmentQuality = .balanced
+    @State private var selectionMode: SelectionMode = .point
     @State private var displayMode: DisplayMode = .spotlight
     @State private var isLoadingImage = false
     @State private var isSegmenting = false
     @State private var confidence: Float?
-    @State private var maskSize: CGSize?
+    @State private var modelMaskSize: CGSize?
+    @State private var scaledMaskSize: CGSize?
     @State private var errorMessage: String?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 imagePickerArea
+                selectionModePicker
                 qualityPicker
                 displayModePicker
                 segmentationCanvas
@@ -45,12 +50,19 @@ struct TapToSegmentView: View {
         .onChange(of: quality) { _, _ in
             clearSegmentationResult()
         }
+        .onChange(of: selectionMode) { _, _ in
+            clearSegmentationResult()
+        }
+    }
+
+    private var shouldShowMaskedImage: Bool {
+        displayMode == .spotlight && maskedImage != nil
     }
 
     private var currentOverlayImage: CGImage? {
         switch displayMode {
         case .spotlight:
-            return spotlightOverlayImage
+            return nil
         case .mask:
             return maskOverlayImage
         }
@@ -67,6 +79,22 @@ struct TapToSegmentView: View {
             }
             .buttonStyle(.glassProminent)
             .disabled(isLoadingImage || isSegmenting)
+        }
+    }
+
+    private var selectionModePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("選取方式")
+                .font(.headline)
+
+            Picker("選取方式", selection: $selectionMode) {
+                ForEach(SelectionMode.allCases) { mode in
+                    Text(mode.title)
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(isSegmenting)
         }
     }
 
@@ -113,11 +141,19 @@ struct TapToSegmentView: View {
                 ZStack {
                     Color(.secondarySystemBackground)
 
-                    Image(uiImage: selectedImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: imageRect.width, height: imageRect.height)
-                        .position(x: imageRect.midX, y: imageRect.midY)
+                    if shouldShowMaskedImage, let maskedImage {
+                        Image(decorative: maskedImage, scale: 1)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: imageRect.width, height: imageRect.height)
+                            .position(x: imageRect.midX, y: imageRect.midY)
+                    } else {
+                        Image(uiImage: selectedImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: imageRect.width, height: imageRect.height)
+                            .position(x: imageRect.midX, y: imageRect.midY)
+                    }
 
                     if let overlayImage = currentOverlayImage {
                         Image(decorative: overlayImage, scale: 1)
@@ -125,6 +161,22 @@ struct TapToSegmentView: View {
                             .scaledToFit()
                             .frame(width: imageRect.width, height: imageRect.height)
                             .position(x: imageRect.midX, y: imageRect.midY)
+                    }
+
+                    if selectionMode == .lasso,
+                       !lassoPoints.isEmpty,
+                       maskedImage == nil,
+                       maskOverlayImage == nil {
+                        lassoPath(in: imageRect)
+                            .stroke(
+                                .yellow,
+                                style: StrokeStyle(
+                                    lineWidth: Self.lassoDisplayLineWidth(in: imageRect),
+                                    lineCap: .round,
+                                    lineJoin: .round
+                                )
+                            )
+                            .shadow(color: .black.opacity(0.45), radius: 2)
                     }
 
                     if let selectedPoint, displayMode == .mask {
@@ -146,10 +198,24 @@ struct TapToSegmentView: View {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onEnded { value in
-                            guard imageRect.contains(value.location) else { return }
+                        .onChanged { value in
+                            guard selectionMode == .lasso,
+                                  imageRect.contains(value.location) else {
+                                return
+                            }
+
                             let normalizedPoint = Self.normalizedPoint(from: value.location, in: imageRect)
-                            segment(at: normalizedPoint)
+                            appendLassoPoint(normalizedPoint)
+                        }
+                        .onEnded { value in
+                            switch selectionMode {
+                            case .point:
+                                guard imageRect.contains(value.location) else { return }
+                                let normalizedPoint = Self.normalizedPoint(from: value.location, in: imageRect)
+                                segment(at: normalizedPoint)
+                            case .lasso:
+                                segmentWithLasso()
+                            }
                         }
                 )
             }
@@ -189,13 +255,14 @@ struct TapToSegmentView: View {
 
     @ViewBuilder
     private var resultArea: some View {
-        if let confidence, let maskSize {
+        if let confidence, let modelMaskSize, let scaledMaskSize {
             VStack(alignment: .leading, spacing: 8) {
                 Text("分割結果")
                     .font(.headline)
 
                 resultRow("Confidence", String(format: "%.2f", confidence))
-                resultRow("Mask size", "\(Int(maskSize.width)) x \(Int(maskSize.height))")
+                resultRow("Model mask", "\(Int(modelMaskSize.width)) x \(Int(modelMaskSize.height))")
+                resultRow("Scaled mask", "\(Int(scaledMaskSize.width)) x \(Int(scaledMaskSize.height))")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -223,6 +290,7 @@ struct TapToSegmentView: View {
                 isLoadingImage = true
                 errorMessage = nil
                 selectedImage = nil
+                tapToSegmenter = nil
                 clearSegmentationResult()
             }
 
@@ -233,8 +301,11 @@ struct TapToSegmentView: View {
                 }
 
                 let preparedImage = image.preparedForTapToSegment(maxPixelLength: 1_280)
+                let segmenter = try TapToSegmenter(image: preparedImage)
+
                 await MainActor.run {
                     selectedImage = preparedImage
+                    tapToSegmenter = segmenter
                     isLoadingImage = false
                 }
             } catch {
@@ -247,31 +318,87 @@ struct TapToSegmentView: View {
     }
 
     private func segment(at normalizedPoint: CGPoint) {
-        guard let selectedImage else { return }
+        guard let tapToSegmenter else { return }
 
         Task {
             await MainActor.run {
                 selectedPoint = normalizedPoint
-                spotlightOverlayImage = nil
+                lassoPoints = []
+                maskedImage = nil
                 maskOverlayImage = nil
                 confidence = nil
-                maskSize = nil
+                modelMaskSize = nil
+                scaledMaskSize = nil
                 errorMessage = nil
                 isSegmenting = true
             }
 
             do {
-                let result = try await TapToSegmenter.segment(
-                    image: selectedImage,
+                let result = try await tapToSegmenter.segment(
                     seedPoint: normalizedPoint,
                     quality: quality
                 )
 
                 await MainActor.run {
-                    spotlightOverlayImage = result.spotlightOverlayImage
+                    maskedImage = result.maskedImage
                     maskOverlayImage = result.maskOverlayImage
                     confidence = result.confidence
-                    maskSize = result.size
+                    modelMaskSize = result.modelMaskSize
+                    scaledMaskSize = result.scaledMaskSize
+                    isSegmenting = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "分割失敗：\(error.localizedDescription)"
+                    isSegmenting = false
+                }
+            }
+        }
+    }
+
+    private func appendLassoPoint(_ normalizedPoint: CGPoint) {
+        if lassoPoints.isEmpty {
+            selectedPoint = nil
+            maskedImage = nil
+            maskOverlayImage = nil
+            confidence = nil
+            modelMaskSize = nil
+            scaledMaskSize = nil
+            errorMessage = nil
+        }
+
+        lassoPoints.append(normalizedPoint)
+    }
+
+    private func segmentWithLasso() {
+        guard let tapToSegmenter else { return }
+        let scribblePoints = lassoPoints
+
+        Task {
+            await MainActor.run {
+                selectedPoint = nil
+                maskedImage = nil
+                maskOverlayImage = nil
+                confidence = nil
+                modelMaskSize = nil
+                scaledMaskSize = nil
+                errorMessage = nil
+                isSegmenting = true
+            }
+
+            do {
+                let result = try await tapToSegmenter.segment(
+                    scribblePoints: scribblePoints,
+                    quality: quality
+                )
+
+                await MainActor.run {
+                    maskedImage = result.maskedImage
+                    maskOverlayImage = result.maskOverlayImage
+                    confidence = result.confidence
+                    modelMaskSize = result.modelMaskSize
+                    scaledMaskSize = result.scaledMaskSize
+                    lassoPoints = []
                     isSegmenting = false
                 }
             } catch {
@@ -285,11 +412,13 @@ struct TapToSegmentView: View {
 
     @MainActor
     private func clearSegmentationResult() {
-        spotlightOverlayImage = nil
+        maskedImage = nil
         maskOverlayImage = nil
         selectedPoint = nil
+        lassoPoints = []
         confidence = nil
-        maskSize = nil
+        modelMaskSize = nil
+        scaledMaskSize = nil
         errorMessage = nil
     }
 
@@ -309,6 +438,23 @@ struct TapToSegmentView: View {
         )
     }
 
+    private func lassoPath(in imageRect: CGRect) -> Path {
+        var path = Path()
+        guard let firstPoint = lassoPoints.first else { return path }
+
+        path.move(to: Self.displayPoint(for: firstPoint, in: imageRect))
+
+        for point in lassoPoints.dropFirst() {
+            path.addLine(to: Self.displayPoint(for: point, in: imageRect))
+        }
+
+        return path
+    }
+
+    private static func lassoDisplayLineWidth(in imageRect: CGRect) -> CGFloat {
+        max(imageRect.width * 0.01, 6)
+    }
+
     private static func normalizedPoint(from location: CGPoint, in imageRect: CGRect) -> CGPoint {
         let x = (location.x - imageRect.minX) / imageRect.width
         let yFromTop = (location.y - imageRect.minY) / imageRect.height
@@ -320,6 +466,23 @@ struct TapToSegmentView: View {
             x: imageRect.minX + normalizedPoint.x * imageRect.width,
             y: imageRect.minY + (1 - normalizedPoint.y) * imageRect.height
         )
+    }
+}
+
+@available(iOS 27.0, *)
+private enum SelectionMode: String, CaseIterable, Identifiable {
+    case point
+    case lasso
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .point:
+            return "點擊"
+        case .lasso:
+            return "套索"
+        }
     }
 }
 
